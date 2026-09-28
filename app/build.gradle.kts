@@ -23,11 +23,13 @@ android {
         // Private Installation ohne Play Store: fester Schlüssel, damit Updates über die alte Version passen.
         // Eigener Schlüssel über Umgebungsvariablen möglich (siehe README).
         create("private") {
-            val keystore = System.getenv("SMBBACKUP_KEYSTORE")
+            // Leere Werte (Secret nicht gesetzt) wie "nicht vorhanden" behandeln.
+            fun env(name: String) = System.getenv(name)?.takeIf { it.isNotEmpty() }
+            val keystore = env("SMBBACKUP_KEYSTORE")
             storeFile = if (keystore != null) file(keystore) else file("signing/dev.keystore")
-            storePassword = System.getenv("SMBBACKUP_KEYSTORE_PASSWORD") ?: "smbbackup"
-            keyAlias = System.getenv("SMBBACKUP_KEY_ALIAS") ?: "smbbackup"
-            keyPassword = System.getenv("SMBBACKUP_KEY_PASSWORD") ?: "smbbackup"
+            storePassword = env("SMBBACKUP_KEYSTORE_PASSWORD") ?: "smbbackup"
+            keyAlias = env("SMBBACKUP_KEY_ALIAS") ?: "smbbackup"
+            keyPassword = env("SMBBACKUP_KEY_PASSWORD") ?: storePassword
         }
     }
 

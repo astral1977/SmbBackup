@@ -48,8 +48,29 @@ jobs:
           SMBBACKUP_TEST_PASSWORD: geheim123
         run: ./gradlew :core:test --stacktrace
 
+      - name: Signaturschlüssel aus GitHub-Secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SMBBACKUP_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "SMBBACKUP_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "Eigener Signaturschlüssel aus den Secrets wird verwendet."
+          else
+            echo "::warning::Secret SMBBACKUP_KEYSTORE_BASE64 fehlt – APK wird mit dem Entwicklungsschlüssel aus dem Repository signiert."
+          fi
+
       - name: APK bauen
+        env:
+          SMBBACKUP_KEYSTORE_PASSWORD: ${{ secrets.SMBBACKUP_KEYSTORE_PASSWORD }}
+          SMBBACKUP_KEY_ALIAS: ${{ secrets.SMBBACKUP_KEY_ALIAS }}
+          SMBBACKUP_KEY_PASSWORD: ${{ secrets.SMBBACKUP_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease -PversionCode=${{ github.run_number }} --stacktrace
+
+      - name: Signatur anzeigen
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -E "DN|SHA-256"
 
       - name: APK umbenennen
         run: cp app/build/outputs/apk/release/app-release.apk SmbBackup-${{ github.run_number }}.apk

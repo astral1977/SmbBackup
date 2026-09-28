@@ -90,9 +90,34 @@ GitHub Actions führt bei jedem Push die Tests (inkl. Samba-Server) aus und baut
 
 ### Signaturschlüssel
 
-Damit Updates über eine installierte Version passen, wird jede APK mit demselben Schlüssel
-`app/signing/dev.keystore` signiert. Der liegt im Repository – für eine rein private App in Ordnung.
-Wer das nicht möchte, erzeugt einen eigenen Schlüssel und übergibt ihn per Umgebungsvariablen
-`SMBBACKUP_KEYSTORE`, `SMBBACKUP_KEYSTORE_PASSWORD`, `SMBBACKUP_KEY_ALIAS`, `SMBBACKUP_KEY_PASSWORD`
-(im Workflow z. B. aus GitHub-Secrets). Achtung: Bei Schlüsselwechsel muss die App einmal
-deinstalliert und neu eingerichtet werden.
+Android installiert ein Update nur, wenn es mit demselben Schlüssel signiert ist wie die installierte
+Version. Ohne weitere Einrichtung signiert der Build mit `app/signing/dev.keystore` aus dem Repository
+(praktisch, aber jeder mit Zugriff aufs Repository könnte damit signieren).
+
+Eigener Schlüssel über GitHub-Secrets:
+
+1. Schlüssel erzeugen (`keytool` gehört zu Java bzw. Android Studio, dort unter `jbr/bin`):
+   ```bash
+   keytool -genkeypair -keystore smbbackup-release.jks -storetype PKCS12 \
+     -alias smbbackup -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=SmbBackup"
+   ```
+   Datei und Passwort sicher aufbewahren (z. B. Passwort-Manager). Geht der Schlüssel verloren,
+   muss die App für Updates deinstalliert und neu eingerichtet werden.
+2. Datei als Base64-Text kopieren:
+   - Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("smbbackup-release.jks")) | Set-Clipboard`
+   - Linux: `base64 -w0 smbbackup-release.jks` · macOS: `base64 -i smbbackup-release.jks | pbcopy`
+3. Auf GitHub: *Repository → Settings → Secrets and variables → Actions → New repository secret*:
+
+   | Name | Wert |
+   |---|---|
+   | `SMBBACKUP_KEYSTORE_BASE64` | der Base64-Text aus Schritt 2 |
+   | `SMBBACKUP_KEYSTORE_PASSWORD` | Passwort aus Schritt 1 |
+   | `SMBBACKUP_KEY_ALIAS` | `smbbackup` |
+   | `SMBBACKUP_KEY_PASSWORD` | dasselbe Passwort (bei PKCS12 identisch) |
+
+4. Build neu starten (*Actions → Build → Run workflow* oder neuer Push). Im Schritt
+   „Signatur anzeigen“ muss jetzt `CN=SmbBackup` statt `CN=SmbBackup private` stehen.
+
+War schon eine APK mit dem Entwicklungsschlüssel installiert, muss sie einmal deinstalliert werden.
+Lokal lässt sich derselbe Schlüssel über die Umgebungsvariablen `SMBBACKUP_KEYSTORE` (Pfad zur Datei),
+`SMBBACKUP_KEYSTORE_PASSWORD`, `SMBBACKUP_KEY_ALIAS` und `SMBBACKUP_KEY_PASSWORD` verwenden.
