@@ -78,6 +78,30 @@ interface RemoteTarget {
 
 data class FileFailure(val path: String, val message: String)
 
+/** Fortschritt eines Kopiervorgangs für die Anzeige. */
+data class CopyProgress(
+    val phase: Phase,
+    /** Bisher geprüfte Dateien (beim Prüfen) bzw. alle Dateien des Ordners (beim Kopieren). */
+    val checked: Int,
+    val filesToUpload: Int = 0,
+    val filesUploaded: Int = 0,
+    val bytesToUpload: Long = 0,
+    /** Inklusive des bereits übertragenen Teils der aktuellen Datei. */
+    val bytesUploaded: Long = 0,
+    val currentFile: String? = null,
+) {
+    enum class Phase { CHECKING, UPLOADING, DONE }
+
+    /** Anteil 0..1 beim Kopieren, nach Datenmenge (sonst nach Dateien), oder `null` beim Prüfen. */
+    val fraction: Float?
+        get() = when {
+            phase != Phase.UPLOADING -> null
+            bytesToUpload > 0 -> (bytesUploaded.toDouble() / bytesToUpload).toFloat().coerceIn(0f, 1f)
+            filesToUpload > 0 -> filesUploaded.toFloat() / filesToUpload
+            else -> null
+        }
+}
+
 data class CopyStats(
     val checked: Int = 0,
     val uploaded: Int = 0,

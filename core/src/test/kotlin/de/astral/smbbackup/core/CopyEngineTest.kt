@@ -149,10 +149,58 @@ class CopyEngineTest {
     @Test
     fun cancellationStopsEarly() {
         val target = MemoryTarget()
+        val source = ListSource("D", (1..10).map { local("f$it.txt", "x") })
+        val stats = CopyEngine(target).copy(source, "B") { target.uploads >= 3 }
+        assertTrue(stats.cancelled)
+        assertEquals(3, stats.uploaded)
+    }
+
+    @Test
+    fun cancellationWhileCheckingUploadsNothing() {
+        val target = MemoryTarget()
         var calls = 0
         val source = ListSource("D", (1..10).map { local("f$it.txt", "x") })
         val stats = CopyEngine(target).copy(source, "B") { ++calls > 3 }
         assertTrue(stats.cancelled)
-        assertEquals(3, stats.uploaded)
+        assertEquals(0, target.uploads)
+    }
+
+    @Test
+    fun progressKnowsTotalsBeforeUploading() {
+        val target = MemoryTarget()
+        CopyEngine(target).copy(ListSource("D", listOf(local("alt.txt", "1"))), "B")
+
+        val events = mutableListOf<CopyProgress>()
+        val source = ListSource("D", listOf(local("alt.txt", "1"), local("a.txt", "aaa"), local("b.txt", "bbbbbbb")))
+        CopyEngine(target, listener = { _, p -> events += p }).copy(source, "B")
+
+        val checking = events.filter { it.phase == CopyProgress.Phase.CHECKING }
+        assertEquals(listOf(1, 2, 3), checking.map { it.checked })
+        assertTrue(checking.all { it.fraction == null })
+
+        val uploading = events.filter { it.phase == CopyProgress.Phase.UPLOADING }
+        assertTrue(uploading.isNotEmpty())
+        // Die unveränderte Datei zählt nicht mit: 2 Dateien, 10 Bytes.
+        assertTrue(uploading.all { it.filesToUpload == 2 && it.bytesToUpload == 10L })
+        assertEquals(listOf("a.txt", "b.txt"), uploading.mapNotNull { it.currentFile }.distinct())
+        assertEquals(0f, uploading.first().fraction)
+
+        val done = events.last()
+        assertEquals(CopyProgress.Phase.DONE, done.phase)
+        assertEquals(2, done.filesUploaded)
+        assertEquals(10L, done.bytesUploaded)
+    }
+
+    @Test
+    fun failedFilesStillAdvanceProgress() {
+        val target = MemoryTarget()
+        val broken = LocalFile(listOf("kaputt.jpg"), 5, 0) { throw IOException("Lesefehler") }
+        val events = mutableListOf<CopyProgress>()
+        CopyEngine(target, listener = { _, p -> events += p })
+            .copy(ListSource("D", listOf(broken, local("ok.jpg", "12345"))), "B")
+        // Beim Start der zweiten Datei gilt die erste (fehlgeschlagene) als erledigt.
+        val second = events.first { it.phase == CopyProgress.Phase.UPLOADING && it.currentFile == "ok.jpg" }
+        assertEquals(1, second.filesUploaded)
+        assertEquals(0.5f, second.fraction)
     }
 }

@@ -29,14 +29,18 @@ object Notifier {
         )
     }
 
-    fun progress(context: Context, text: String, cancelIntent: PendingIntent): Notification =
+    /** @param fraction Fortschritt 0..1 oder `null`, solange er unbekannt ist (laufender Balken). */
+    fun progress(context: Context, text: String, fraction: Float?, cancelIntent: PendingIntent): Notification =
         Notification.Builder(context, CHANNEL_PROGRESS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Sicherung läuft")
-            .setContentText(text)
+            .setContentText(text.substringBefore('\n'))
+            .setStyle(Notification.BigTextStyle().bigText(text))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setProgress(0, 0, true)
+            .apply {
+                if (fraction == null) setProgress(0, 0, true) else setProgress(1000, (fraction * 1000).toInt(), false)
+            }
             .setContentIntent(openApp(context, MainActivity.TAB_STATUS))
             .addAction(Notification.Action.Builder(null, "Abbrechen", cancelIntent).build())
             .build()

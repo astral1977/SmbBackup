@@ -54,7 +54,12 @@ fun StatusScreen(vm: MainViewModel, openSettings: () -> Unit) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Sicherung läuft", style = MaterialTheme.typography.titleMedium)
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    val fraction = work?.progress?.getFloat(BackupWorker.KEY_FRACTION, -1f) ?: -1f
+                    if (fraction >= 0f) {
+                        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
                     Text(work?.progress?.getString(BackupWorker.KEY_PROGRESS) ?: "Wird vorbereitet …")
                     OutlinedButton(onClick = vm::cancelBackup) { Text("Abbrechen") }
                 }

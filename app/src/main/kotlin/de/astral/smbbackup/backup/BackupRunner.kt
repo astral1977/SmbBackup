@@ -7,6 +7,7 @@ import androidx.core.net.toUri
 import de.astral.smbbackup.app
 import de.astral.smbbackup.core.CopyEngine
 import de.astral.smbbackup.core.CopyOptions
+import de.astral.smbbackup.core.CopyProgress
 import de.astral.smbbackup.core.CopyProgressListener
 import de.astral.smbbackup.core.CopyStats
 import de.astral.smbbackup.core.SmbBackupSession
@@ -34,9 +35,12 @@ class BackupRunner(private val context: Context) {
 
     data class Outcome(val status: RunStatus, val message: String, val stats: CopyStats? = null)
 
+    /** Text für die Anzeige; [fraction] (0..1) nur, wenn der Fortschritt bekannt ist. */
+    data class Progress(val text: String, val fraction: Float? = null)
+
     private val latestStats = AtomicReference<CopyStats?>(null)
 
-    suspend fun run(trigger: Trigger, deadline: Long, onProgress: suspend (String) -> Unit): Outcome {
+    suspend fun run(trigger: Trigger, deadline: Long, onProgress: suspend (Progress) -> Unit): Outcome {
         val log = context.app.runLog
         log.markInterrupted()
         val runId = log.start(trigger)
@@ -68,7 +72,7 @@ class BackupRunner(private val context: Context) {
         return outcome
     }
 
-    private suspend fun execute(deadline: Long, onProgress: suspend (String) -> Unit): Outcome {
+    private suspend fun execute(deadline: Long, onProgress: suspend (Progress) -> Unit): Outcome {
         val settings = context.app.settings.load()
         val password = context.app.credentials.loadPassword()
         val missing = settings.missingFields() + listOfNotNull(if (password == null) "Passwort" else null)
@@ -80,7 +84,7 @@ class BackupRunner(private val context: Context) {
         var result = gate.check(settings)
         while (result !is GateResult.Ready && System.currentTimeMillis() < deadline) {
             val reason = (result as? GateResult.NotHome)?.reason ?: (result as GateResult.Problem).reason
-            onProgress("Warte: $reason")
+            onProgress(Progress("Warte: $reason"))
             delay(30_000)
             result = gate.check(settings)
         }
@@ -90,7 +94,7 @@ class BackupRunner(private val context: Context) {
             is GateResult.Ready -> result
         }
 
-        onProgress("Verbinde mit ${settings.host} …")
+        onProgress(Progress("Verbinde mit ${settings.host} …"))
         val stats = copyAll(settings, password!!, ready.network, onProgress)
         return classify(stats)
     }
@@ -99,14 +103,14 @@ class BackupRunner(private val context: Context) {
         settings: AppSettings,
         password: String,
         network: Network,
-        onProgress: suspend (String) -> Unit,
+        onProgress: suspend (Progress) -> Unit,
     ): CopyStats = coroutineScope {
         val job = coroutineContext.job
-        val progressText = AtomicReference<String?>(null)
+        val progress = AtomicReference<Progress?>(null)
         val ticker = launch {
             while (isActive) {
                 delay(1_000)
-                progressText.getAndSet(null)?.let { onProgress(it) }
+                progress.getAndSet(null)?.let { onProgress(it) }
             }
         }
         val cm = context.getSystemService(ConnectivityManager::class.java)
@@ -125,11 +129,13 @@ class BackupRunner(private val context: Context) {
                 )
                 SmbBackupSession.open(config, network.socketFactory).use { session ->
                     var total = CopyStats()
-                    for (folder in settings.folders.filter { it.enabled }) {
+                    val folders = settings.folders.filter { it.enabled }
+                    for ((index, folder) in folders.withIndex()) {
                         if (!job.isActive) break
-                        val listener = CopyProgressListener { s, file ->
+                        val label = if (folders.size > 1) "Ordner ${index + 1}/${folders.size} · ${folder.name}" else folder.name
+                        val listener = CopyProgressListener { s, p ->
                             latestStats.set(total + s)
-                            progressText.set("${folder.name}: ${s.checked} geprüft, ${s.uploaded} kopiert" + (file?.let { "\n$it" } ?: ""))
+                            progress.set(describe(label, p))
                         }
                         val engine = CopyEngine(session, CopyOptions(changedFilePolicy = settings.changedFilePolicy), listener)
                         val source = SafSource(context.contentResolver, folder.uri.toUri(), folder.name, settings.skipHidden)
@@ -143,6 +149,19 @@ class BackupRunner(private val context: Context) {
         } finally {
             cm.bindProcessToNetwork(null)
             ticker.cancel()
+        }
+    }
+
+    private fun describe(folder: String, p: CopyProgress): Progress {
+        val where = p.currentFile?.let { "$folder: $it" } ?: folder
+        return when {
+            p.phase == CopyProgress.Phase.CHECKING -> Progress("Prüfe Dateien … ${p.checked} geprüft\n$where")
+            p.filesToUpload == 0 -> Progress("Nichts Neues (${p.checked} Dateien geprüft)\n$folder", 1f)
+            else -> Progress(
+                "${p.filesUploaded} von ${p.filesToUpload} Dateien · " +
+                    "${formatBytes(p.bytesUploaded)} von ${formatBytes(p.bytesToUpload)}\n$where",
+                p.fraction ?: 1f,
+            )
         }
     }
 

@@ -18,6 +18,9 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     companion object {
         const val UNIQUE_NAME = "backup"
         const val KEY_PROGRESS = "progress"
+
+        /** Anteil 0..1 oder -1, solange die Gesamtmenge noch nicht feststeht. */
+        const val KEY_FRACTION = "fraction"
         private const val KEY_TRIGGER = "trigger"
         private const val KEY_DEADLINE = "deadline"
 
@@ -43,9 +46,9 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val trigger = runCatching { Trigger.valueOf(inputData.getString(KEY_TRIGGER)!!) }.getOrDefault(Trigger.MANUAL)
         val deadline = inputData.getLong(KEY_DEADLINE, 0)
         promote("Wird vorbereitet …")
-        BackupRunner(applicationContext).run(trigger, deadline) { text ->
-            setProgress(workDataOf(KEY_PROGRESS to text))
-            promote(text)
+        BackupRunner(applicationContext).run(trigger, deadline) { progress ->
+            setProgress(workDataOf(KEY_PROGRESS to progress.text, KEY_FRACTION to (progress.fraction ?: -1f)))
+            promote(progress.text, progress.fraction)
         }
         // Fehler stehen im Protokoll; ein automatischer Neuversuch folgt erst zum nächsten Termin.
         return Result.success()
@@ -56,18 +59,18 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
      * nach 10 Minuten beendet werden. Android erlaubt das aus dem Hintergrund nur mit
      * Ausnahme von der Akku-Optimierung; sonst läuft der Job normal weiter.
      */
-    private suspend fun promote(text: String) {
+    private suspend fun promote(text: String, fraction: Float? = null) {
         if (!foregroundAllowed) return
         try {
-            setForeground(foregroundInfo(text))
+            setForeground(foregroundInfo(text, fraction))
         } catch (_: IllegalStateException) {
             foregroundAllowed = false
         }
     }
 
-    private fun foregroundInfo(text: String) = ForegroundInfo(
+    private fun foregroundInfo(text: String, fraction: Float? = null) = ForegroundInfo(
         Notifier.ID_PROGRESS,
-        Notifier.progress(applicationContext, text, WorkManager.getInstance(applicationContext).createCancelPendingIntent(id)),
+        Notifier.progress(applicationContext, text, fraction, WorkManager.getInstance(applicationContext).createCancelPendingIntent(id)),
         ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
     )
 }
