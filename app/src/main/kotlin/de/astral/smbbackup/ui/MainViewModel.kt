@@ -18,7 +18,7 @@ import de.astral.smbbackup.backup.BackupWorker
 import de.astral.smbbackup.backup.NetworkGate
 import de.astral.smbbackup.core.CopyEngine
 import de.astral.smbbackup.core.HostProbe
-import de.astral.smbbackup.core.NameSanitizer
+import de.astral.smbbackup.core.RemoteFolderSuggestion
 import de.astral.smbbackup.core.SmbBackupSession
 import de.astral.smbbackup.core.SmbServerConfig
 import de.astral.smbbackup.core.describeError
@@ -117,11 +117,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Übernimmt die dauerhafte Leseberechtigung für einen gewählten Ordner. */
     fun folderFromPicker(uri: Uri): FolderConfig {
         context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        val documentUri = DocumentsContract.buildDocumentUriUsingTree(uri, DocumentsContract.getTreeDocumentId(uri))
+        val treeId = DocumentsContract.getTreeDocumentId(uri)
+        val documentUri = DocumentsContract.buildDocumentUriUsingTree(uri, treeId)
         val name = context.contentResolver.query(
             documentUri, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null,
         )?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "Ordner"
-        return FolderConfig(uri = uri.toString(), name = name, remoteFolder = NameSanitizer.sanitize(name))
+        val remoteFolder = RemoteFolderSuggestion.suggest(uri.authority, treeId, name)
+        return FolderConfig(uri = uri.toString(), name = name, remoteFolder = remoteFolder)
     }
 
     fun backupNow() {
