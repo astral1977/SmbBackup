@@ -9,3 +9,7 @@ captures/
 .cxx/
 *.apk
 *.aab
+
+# Release-Signaturschlüssel nie einchecken
+*.jks
+*.jks.base64.txt

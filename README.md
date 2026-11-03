@@ -94,7 +94,15 @@ Android installiert ein Update nur, wenn es mit demselben Schlüssel signiert is
 Version. Ohne weitere Einrichtung signiert der Build mit `app/signing/dev.keystore` aus dem Repository
 (praktisch, aber jeder mit Zugriff aufs Repository könnte damit signieren).
 
-Eigener Schlüssel über GitHub-Secrets:
+Eigener Schlüssel über GitHub-Secrets – unter Linux erledigt das ein Script (fragt nach einem
+Passwort, legt den Schlüssel in `~/smbbackup-keys` ab und setzt die Secrets per `gh`, falls die
+GitHub-CLI installiert und angemeldet ist; sonst zeigt es, was von Hand einzutragen ist):
+
+```bash
+./scripts/create-release-keystore.sh
+```
+
+Von Hand geht es so:
 
 1. Schlüssel erzeugen (`keytool` gehört zu Java bzw. Android Studio, dort unter `jbr/bin`):
    ```bash
