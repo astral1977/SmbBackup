@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -113,7 +114,28 @@ fun StatusScreen(vm: MainViewModel, openSettings: () -> Unit) {
         }
 
         SetupChecklist(vm.resumeTick)
+
+        AppVersion()
     }
+}
+
+/** Versionsnummer, z. B. "Version 0.1.8 (Build 8)" – die Build-Nummer entspricht dem GitHub-Actions-Lauf. */
+@Composable
+private fun AppVersion() {
+    val context = LocalContext.current
+    val text = remember {
+        runCatching {
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            "Version ${info.versionName} (Build ${info.longVersionCode})"
+        }.getOrDefault("Version unbekannt")
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
