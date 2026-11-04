@@ -16,7 +16,8 @@ android {
         targetSdk = 36
         // In GitHub Actions wird die Build-Nummer übergeben, damit Updates installierbar bleiben.
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = "0.1.${versionCode}"
+        // Bei einem Release (Git-Tag "v1.2.3") setzt GitHub Actions die Version aus dem Tag.
+        versionName = (findProperty("versionName") as String?)?.takeIf { it.isNotBlank() } ?: "1.0.0"
     }
 
     signingConfigs {

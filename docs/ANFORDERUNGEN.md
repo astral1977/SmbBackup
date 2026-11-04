@@ -18,7 +18,7 @@ festen Zeiten auf eine SMB-Freigabe eines Synology-NAS (DSM 6) kopiert.
 | Bedingungen | Handy ist mit einem eingetragenen **Heim-WLAN** (SSID) verbunden **und** das NAS ist auf Port 445 erreichbar. Keine Sicherung über Mobilfunk, Internet oder VPN; die Verbindung wird explizit an das WLAN gebunden. |
 | Protokoll/Log | Jeder Lauf mit Zeit, Auslöser, Status, Anzahl geprüft/kopiert/unverändert/fehlerhaft, Datenmenge, Fehlerdetails je Datei. Aufbewahrung 180 Tage / max. 1000 Einträge. |
 | Benachrichtigung | Bei Fehlschlag und Teilfehlern; Warnung nach n Tagen ohne erfolgreiche Sicherung (Standard 3); Erfolg optional. |
-| Verteilung | Privat per APK (GitHub Actions), kein Play Store. |
+| Verteilung | Privat per APK als GitHub-Release (Tag `v<Version>`, gebaut von GitHub Actions), kein Play Store. |
 | Android | minSdk = targetSdk = 36 (Android 16). |
 
 ## Weitere Punkte, die berücksichtigt sind

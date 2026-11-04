@@ -9,6 +9,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      # Zum Anlegen des GitHub-Releases bei einem Versions-Tag (v1.2.3).
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -60,12 +63,18 @@ jobs:
             echo "::warning::Secret SMBBACKUP_KEYSTORE_BASE64 fehlt – APK wird mit dem Entwicklungsschlüssel aus dem Repository signiert."
           fi
 
+      - name: Version bestimmen
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          fi
+
       - name: APK bauen
         env:
           SMBBACKUP_KEYSTORE_PASSWORD: ${{ secrets.SMBBACKUP_KEYSTORE_PASSWORD }}
           SMBBACKUP_KEY_ALIAS: ${{ secrets.SMBBACKUP_KEY_ALIAS }}
           SMBBACKUP_KEY_PASSWORD: ${{ secrets.SMBBACKUP_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease -PversionCode=${{ github.run_number }} --stacktrace
+        run: ./gradlew :app:assembleRelease -PversionCode=${{ github.run_number }} -PversionName="$VERSION_NAME" --stacktrace
 
       - name: Signatur anzeigen
         run: |
@@ -79,6 +88,20 @@ jobs:
         with:
           name: SmbBackup-apk-${{ github.run_number }}
           path: SmbBackup-${{ github.run_number }}.apk
+
+      - name: GitHub-Release anlegen
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Ohne eigenen Signaturschlüssel kein Release: Updates würden sonst nicht passen.
+          if [ -z "$SMBBACKUP_KEYSTORE" ]; then
+            echo "::error::Secret SMBBACKUP_KEYSTORE_BASE64 fehlt – kein Release mit dem Entwicklungsschlüssel."
+            exit 1
+          fi
+          cp SmbBackup-${{ github.run_number }}.apk "SmbBackup-$VERSION_NAME.apk"
+          gh release create "$GITHUB_REF_NAME" "SmbBackup-$VERSION_NAME.apk" \
+            --title "SmbBackup $VERSION_NAME" --generate-notes
 
       - uses: actions/upload-artifact@v4
         if: failure()

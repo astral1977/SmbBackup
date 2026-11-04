@@ -23,9 +23,9 @@ Getestet wurde die App bisher nur auf dem Motorola Moto G75 und Moto G86. Andere
 beenden Hintergrund-Apps teils strenger; dann die App in den Akku-Einstellungen auf
 „Nicht einschränken“ stellen.
 
-1. Auf GitHub im Reiter **Actions** den neuesten erfolgreichen Lauf von „Build“ öffnen und unten
-   unter *Artifacts* `SmbBackup-apk-…` herunterladen (ZIP, darin die APK).
-2. APK aufs Handy kopieren (oder direkt am Handy herunterladen) und antippen.
+1. Unter **[Releases](https://github.com/astral1977/SmbBackup/releases/latest)** die Datei
+   `SmbBackup-<Version>.apk` herunterladen (am einfachsten direkt am Handy).
+2. Die APK antippen.
 3. Android fragt einmalig, ob die App (Dateimanager bzw. Browser) „unbekannte Apps installieren“ darf –
    erlauben. Bei Motorola: *Einstellungen → Apps → Spezieller App-Zugriff → Unbekannte Apps installieren*.
 4. Play Protect warnt ggf. vor einer unbekannten App – „Trotzdem installieren“.
@@ -98,7 +98,21 @@ SMBBACKUP_TEST_USER=backupuser SMBBACKUP_TEST_PASSWORD=geheim123 \
 ./gradlew :app:assembleRelease       # APK, benötigt Android SDK
 ```
 
-GitHub Actions führt bei jedem Push die Tests (inkl. Samba-Server) aus und baut die APK.
+GitHub Actions führt bei jedem Push die Tests (inkl. Samba-Server) aus und baut die APK
+(zum Testen unter *Actions → Build → Artifacts*, 90 Tage aufbewahrt).
+
+### Neue Version veröffentlichen
+
+Einen Tag `v<Version>` auf den gewünschten Stand von `main` setzen und pushen, z. B.:
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+GitHub Actions baut daraus die APK mit Versionsname `1.1.0` und legt unter *Releases* ein
+Release mit `SmbBackup-1.1.0.apk` an. Releases bleiben dauerhaft, GitHub zählt dort die Downloads.
+Die Build-Nummer (`versionCode`) ist die fortlaufende Nummer des Actions-Laufs.
 
 ### Signaturschlüssel
 
