@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Als Release veröffentlichen, z. B. 1.1.0 (leer = nur bauen)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -64,9 +69,21 @@ jobs:
           fi
 
       - name: Version bestimmen
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [ -n "$INPUT_VERSION" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          fi
+          if [ -n "$VERSION" ]; then
+            if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Ungültige Version \"$VERSION\" (Format 1.2.3)"
+              exit 1
+            fi
+            echo "VERSION_NAME=$VERSION" >> "$GITHUB_ENV"
+            echo "RELEASE_TAG=v$VERSION" >> "$GITHUB_ENV"
           fi
 
       - name: APK bauen
@@ -90,7 +107,7 @@ jobs:
           path: SmbBackup-${{ github.run_number }}.apk
 
       - name: GitHub-Release anlegen
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -100,7 +117,8 @@ jobs:
             exit 1
           fi
           cp SmbBackup-${{ github.run_number }}.apk "SmbBackup-$VERSION_NAME.apk"
-          gh release create "$GITHUB_REF_NAME" "SmbBackup-$VERSION_NAME.apk" \
+          # Legt den Tag an, falls er noch nicht existiert (Start per "Run workflow").
+          gh release create "$RELEASE_TAG" "SmbBackup-$VERSION_NAME.apk" --target "$GITHUB_SHA" \
             --title "SmbBackup $VERSION_NAME" --generate-notes
 
       - uses: actions/upload-artifact@v4

@@ -103,7 +103,8 @@ GitHub Actions führt bei jedem Push die Tests (inkl. Samba-Server) aus und baut
 
 ### Neue Version veröffentlichen
 
-Einen Tag `v<Version>` auf den gewünschten Stand von `main` setzen und pushen, z. B.:
+Am einfachsten auf GitHub: *Actions → Build → Run workflow*, Branch `main` wählen und bei
+„Als Release veröffentlichen“ die Version eintragen (z. B. `1.1.0`). Alternativ einen Tag pushen:
 
 ```bash
 git tag v1.1.0
