@@ -11,11 +11,17 @@ das NAS erreichbar ist.
 - **Zeitplan:** Wochentage + Uhrzeit, exakter Alarm. Danach wird eine einstellbare Zeit auf
   Heim-WLAN und hochfahrendes NAS gewartet; klappt es nicht, wird es zum nächsten Termin wieder versucht.
 - **Protokoll** jedes Laufs, **Benachrichtigung** bei Fehlern und wenn mehrere Tage kein Backup gelang.
-- Mindestversion **Android 16**.
+- Mindestversion **Android 16**. Getestet nur auf **Motorola Moto G75** und **Moto G86**.
 
 Details zu Anforderungen und Entscheidungen: [docs/ANFORDERUNGEN.md](docs/ANFORDERUNGEN.md)
 
 ## Installation (ohne Play Store)
+
+**Voraussetzung:** Android 16 oder neuer (*Einstellungen → Über das Telefon → Android-Version*).
+Auf älteren Geräten bricht die Installation mit „App nicht installiert“ ab.
+Getestet wurde die App bisher nur auf dem Motorola Moto G75 und Moto G86. Andere Hersteller
+beenden Hintergrund-Apps teils strenger; dann die App in den Akku-Einstellungen auf
+„Nicht einschränken“ stellen.
 
 1. Auf GitHub im Reiter **Actions** den neuesten erfolgreichen Lauf von „Build“ öffnen und unten
    unter *Artifacts* `SmbBackup-apk-…` herunterladen (ZIP, darin die APK).
