@@ -7,7 +7,7 @@ coreKtx = "1.16.0"
 activityCompose = "1.10.1"
 lifecycle = "2.9.2"
 composeBom = "2025.09.00"
-work = "2.10.3"
+work = "2.10.5"
 
 [libraries]
 smbj = { module = "com.hierynomus:smbj", version.ref = "smbj" }
