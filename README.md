@@ -38,6 +38,9 @@ siehe unten).
    (Android löst NetBIOS-Namen nicht zuverlässig auf).
 5. Fährt das NAS per Zeitplan hoch, die Uhrzeit in der App so wählen, dass das NAS spätestens
    nach der eingestellten Wartezeit (Standard 15 Minuten) erreichbar ist.
+6. Optional **Wake-on-LAN**: *Systemsteuerung → Hardware & Energie → Allgemein → „WOL auf LAN 1
+   aktivieren“*. Die MAC-Adresse steht unter *Systemsteuerung → Netzwerk → Netzwerkschnittstelle*.
+   Das NAS muss per Kabel angeschlossen und normal heruntergefahren worden sein.
 
 ## App einrichten
 
@@ -48,6 +51,7 @@ siehe unten).
 2. **Einstellungen**-Tab: NAS-Adresse, Freigabe, Zielordner, Benutzer, Passwort, Heim-WLAN
    („Aktuelles WLAN übernehmen“), Zeitplan und Ordner eintragen, **Speichern**.
 3. „Verbindung testen“ prüft WLAN, Erreichbarkeit, Anmeldung, Verschlüsselung und Schreibrecht.
+   Mit eingetragener MAC-Adresse weckt „NAS aufwecken“ das NAS per Wake-on-LAN.
 4. „Jetzt sichern“ für den ersten (evtl. großen) Durchlauf am besten mit geöffneter App im WLAN.
 
 Zielpfad auf dem NAS: `\\NAS\Freigabe\<Zielordner>\<Unterordner je Ordner>\…`
@@ -57,9 +61,11 @@ Zielpfad auf dem NAS: `\\NAS\Freigabe\<Zielordner>\<Unterordner je Ordner>\…`
 ```
 Exakter Alarm (Wochentag + Uhrzeit)
   └─ WorkManager-Job (Vordergrunddienst "dataSync")
-       ├─ Heim-WLAN? (SSID)      ─┐ alle 30 s erneut prüfen,
-       ├─ NAS:445 erreichbar?     ─┘ bis Wartezeit abgelaufen
-       ├─ Anmeldung (SMB3, verschlüsselt) – Verbindung ausdrücklich über das WLAN
+       ├─ Heim-WLAN? (SSID)      ─┐
+       ├─ NAS:445 erreichbar?     │ alle 30 s erneut prüfen,
+       │    sonst Wake-on-LAN     │ bis Wartezeit abgelaufen
+       ├─ Anmeldung (SMB3,       ─┘ (Zeitüberschreitung → neuer Versuch)
+       │    verschlüsselt) – Verbindung ausdrücklich über das WLAN
        ├─ je Ordner: Dateien vergleichen (Größe + Änderungszeit), Neues hochladen
        │    Upload in temporäre Datei, danach Umbenennen → keine halben Dateien
        └─ Protokoll-Eintrag, bei Fehlern Benachrichtigung

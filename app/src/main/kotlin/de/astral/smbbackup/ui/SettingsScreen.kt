@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import de.astral.smbbackup.core.CopyEngine
+import de.astral.smbbackup.core.WakeOnLan
 import de.astral.smbbackup.data.AppSettings
 import de.astral.smbbackup.data.FolderConfig
 import kotlinx.coroutines.launch
@@ -73,8 +74,13 @@ fun SettingsScreen(vm: MainViewModel) {
             FolderSection(draft, { draft = it }, vm)
             OptionsSection(draft) { draft = it }
 
-            OutlinedButton(onClick = { vm.testConnection(draft, password) }, enabled = !vm.testing) {
-                Text(if (vm.testing) "Teste …" else "Verbindung mit diesen Angaben testen")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (draft.wolMac.isNotBlank()) {
+                    OutlinedButton(onClick = { vm.wakeNas(draft) }, enabled = !vm.testing) { Text("NAS aufwecken") }
+                }
+                OutlinedButton(onClick = { vm.testConnection(draft, password) }, enabled = !vm.testing) {
+                    Text(if (vm.testing) "Teste …" else "Verbindung testen")
+                }
             }
             vm.testResult?.let { Card(Modifier.fillMaxWidth()) { Text(it, Modifier.padding(16.dp)) } }
         }
@@ -173,6 +179,21 @@ private fun ServerSection(
     OutlinedTextField(
         s.domain, { onChange(s.copy(domain = it)) },
         label = { Text("Domäne (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+    )
+    val macValid = s.wolMac.isBlank() || WakeOnLan.parseMac(s.wolMac) != null
+    OutlinedTextField(
+        s.wolMac, { onChange(s.copy(wolMac = it)) },
+        label = { Text("MAC-Adresse für Wake-on-LAN (optional)") },
+        placeholder = { Text("00:11:32:AB:CD:EF") },
+        supportingText = {
+            Text(
+                if (macValid) "DSM: Systemsteuerung > Netzwerk > Netzwerkschnittstelle. Leer = kein Wecken."
+                else "Format z. B. 00:11:32:AB:CD:EF",
+            )
+        },
+        isError = !macValid,
+        singleLine = true, modifier = Modifier.fillMaxWidth(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
     )
     SwitchRow(
         "Verschlüsselung erzwingen", s.requireEncryption,

@@ -41,12 +41,17 @@ festen Zeiten auf eine SMB-Freigabe eines Synology-NAS (DSM 6) kopiert.
   eingeschaltetem Standortdienst. Die App prüft das und zeigt eine verständliche Meldung.
 - **Akku:** Ausnahme von der Akku-Optimierung wird angefragt, sonst darf der Job nicht als
   Vordergrunddienst laufen.
+- **Wake-on-LAN (optional):** Mit eingetragener MAC-Adresse wird das NAS geweckt, wenn es im
+  Heim-WLAN nicht erreichbar ist (Broadcast nur über das WLAN, bei jedem Prüfversuch erneut).
+  Manuell gestartete Sicherungen warten danach die eingestellte Wartezeit. Knopf „NAS aufwecken“.
+- **Hochfahrendes NAS:** Antwortet das NAS beim Anmelden nicht rechtzeitig, wird es innerhalb der
+  Wartezeit erneut versucht. Fehlanmeldungen (Passwort falsch) werden nicht wiederholt, damit die
+  automatische IP-Sperre des DSM nicht auslöst.
 - **Diagnose:** „Verbindung testen“ prüft WLAN, Erreichbarkeit, Anmeldung, Protokollversion,
   Verschlüsselung, Schreibrecht und freien Speicher.
 
 ## Bewusst nicht umgesetzt (mögliche Erweiterungen)
 
-- Wake-on-LAN (das NAS fährt per Zeitplan selbst hoch).
 - Mehrere NAS/Zeitpläne, Ausschlussmuster außer „versteckte Dateien“.
 - Prüfsummenvergleich (langsam; Größe + Zeit reicht für Fotos/Dokumente).
 - Export/Import der Einstellungen.

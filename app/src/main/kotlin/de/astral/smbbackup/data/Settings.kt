@@ -26,6 +26,8 @@ data class AppSettings(
     val username: String = "",
     val domain: String = "",
     val requireEncryption: Boolean = true,
+    /** MAC-Adresse des NAS für Wake-on-LAN; leer = aus. */
+    val wolMac: String = "",
     val homeSsids: List<String> = emptyList(),
     val scheduleEnabled: Boolean = false,
     val days: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
@@ -68,6 +70,7 @@ class SettingsRepository(context: Context) {
             username = prefs.getString("username", d.username)!!,
             domain = prefs.getString("domain", d.domain)!!,
             requireEncryption = prefs.getBoolean("requireEncryption", d.requireEncryption),
+            wolMac = prefs.getString("wolMac", d.wolMac)!!,
             homeSsids = prefs.getString("homeSsids", null)?.let { json ->
                 JSONArray(json).let { a -> List(a.length()) { a.getString(it) } }
             } ?: d.homeSsids,
@@ -93,6 +96,7 @@ class SettingsRepository(context: Context) {
         putString("username", s.username.trim())
         putString("domain", s.domain.trim())
         putBoolean("requireEncryption", s.requireEncryption)
+        putString("wolMac", s.wolMac.trim())
         putString("homeSsids", JSONArray(s.homeSsids.map { it.trim() }.filter { it.isNotEmpty() }.distinct()).toString())
         putBoolean("scheduleEnabled", s.scheduleEnabled)
         putString("days", s.days.sorted().joinToString(",") { it.name })

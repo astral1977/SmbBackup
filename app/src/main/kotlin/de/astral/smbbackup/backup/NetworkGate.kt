@@ -28,9 +28,21 @@ sealed interface GateResult {
     /** Handy ist nicht im Heim-WLAN – kein Fehler, nur übersprungen. */
     data class NotHome(val reason: String) : GateResult
 
+    /** Im Heim-WLAN, aber das NAS antwortet nicht (aus oder fährt noch hoch). */
+    data class NasOffline(val network: Network, val reason: String) : GateResult
+
     /** Im Heim-WLAN, aber es klappt trotzdem nicht – wird als Fehler gemeldet. */
     data class Problem(val reason: String) : GateResult
 }
+
+/** Grund, warum (noch) nicht gesichert werden kann; `null` bei [GateResult.Ready]. */
+val GateResult.message: String?
+    get() = when (val r = this) {
+        is GateResult.Ready -> null
+        is GateResult.NotHome -> r.reason
+        is GateResult.NasOffline -> r.reason
+        is GateResult.Problem -> r.reason
+    }
 
 class NetworkGate(private val context: Context) {
 
@@ -60,7 +72,7 @@ class NetworkGate(private val context: Context) {
             // Verbindung ausdrücklich über das WLAN, nie über Mobilfunk.
             HostProbe.isReachable(settings.host, settings.port, socketFactory = wifi.network.socketFactory)
         }
-        if (!reachable) return GateResult.Problem("NAS ${settings.host} im WLAN \"$ssid\" nicht erreichbar")
+        if (!reachable) return GateResult.NasOffline(wifi.network, "NAS ${settings.host} im WLAN \"$ssid\" nicht erreichbar")
         return GateResult.Ready(wifi.network, ssid)
     }
 

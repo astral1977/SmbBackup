@@ -16,6 +16,7 @@ import androidx.work.WorkManager
 import de.astral.smbbackup.app
 import de.astral.smbbackup.backup.BackupWorker
 import de.astral.smbbackup.backup.NetworkGate
+import de.astral.smbbackup.backup.WolSender
 import de.astral.smbbackup.core.CopyEngine
 import de.astral.smbbackup.core.HostProbe
 import de.astral.smbbackup.core.RemoteFolderSuggestion
@@ -135,6 +136,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun currentSsid(): String? = NetworkGate(context).currentWifi()?.ssid
 
+    /** Sendet Wake-on-LAN mit der (evtl. noch nicht gespeicherten) MAC-Adresse. */
+    fun wakeNas(draft: AppSettings) {
+        if (testing) return
+        testing = true
+        testResult = null
+        viewModelScope.launch {
+            testResult = try {
+                WolSender(context).wake(draft.wolMac) +
+                    "\nDas NAS braucht meist 1–3 Minuten zum Hochfahren. Danach \"Verbindung testen\"."
+            } catch (e: Exception) {
+                "✗ ${describeError(e)}"
+            } finally {
+                testing = false
+            }
+        }
+    }
+
     /** Prüft Schritt für Schritt mit den (evtl. noch nicht gespeicherten) Eingaben. */
     fun testConnection(draft: AppSettings, draftPassword: String) {
         if (testing) return
@@ -155,6 +173,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) {
                     if (!HostProbe.isReachable(draft.host.trim(), draft.port, socketFactory = socketFactory)) {
                         lines += "✗ ${draft.host}:${draft.port} nicht erreichbar"
+                        if (draft.wolMac.isNotBlank()) lines += "Ist das NAS aus? Dann zuerst \"NAS aufwecken\"."
                         return@withContext
                     }
                     lines += "✓ ${draft.host}:${draft.port} erreichbar"

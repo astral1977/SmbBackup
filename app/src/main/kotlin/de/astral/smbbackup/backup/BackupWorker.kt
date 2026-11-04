@@ -1,5 +1,6 @@
 package de.astral.smbbackup.backup
 
+import android.app.job.JobParameters
 import android.content.Context
 import android.content.pm.ServiceInfo
 import androidx.work.CoroutineWorker
@@ -46,12 +47,32 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val trigger = runCatching { Trigger.valueOf(inputData.getString(KEY_TRIGGER)!!) }.getOrDefault(Trigger.MANUAL)
         val deadline = inputData.getLong(KEY_DEADLINE, 0)
         promote("Wird vorbereitet …")
-        BackupRunner(applicationContext).run(trigger, deadline) { progress ->
+        BackupRunner(applicationContext).run(trigger, deadline, stopReason = { describeStop(stopReason) }) { progress ->
             setProgress(workDataOf(KEY_PROGRESS to progress.text, KEY_FRACTION to (progress.fraction ?: -1f)))
             promote(progress.text, progress.fraction)
         }
         // Fehler stehen im Protokoll; ein automatischer Neuversuch folgt erst zum nächsten Termin.
         return Result.success()
+    }
+
+    /** Warum Android/WorkManager den Lauf beendet hat; `null` bei Abbruch durch den Nutzer. */
+    private fun describeStop(reason: Int): String? {
+        val text = when (reason) {
+            JobParameters.STOP_REASON_CANCELLED_BY_APP -> return null
+            JobParameters.STOP_REASON_USER -> "Vom Nutzer in den Systemeinstellungen beendet"
+            JobParameters.STOP_REASON_PREEMPT -> "Android hat einen anderen Job vorgezogen"
+            JobParameters.STOP_REASON_TIMEOUT -> "Zeitlimit für Hintergrundarbeit erreicht"
+            JobParameters.STOP_REASON_DEVICE_STATE -> "Gerätezustand (z. B. Energiesparmodus)"
+            JobParameters.STOP_REASON_CONSTRAINT_CONNECTIVITY -> "Netzwerkverbindung weggefallen"
+            JobParameters.STOP_REASON_CONSTRAINT_DEVICE_IDLE -> "Ruhemodus (Doze)"
+            JobParameters.STOP_REASON_QUOTA -> "Kontingent für Hintergrundarbeit aufgebraucht"
+            JobParameters.STOP_REASON_BACKGROUND_RESTRICTION -> "App im Hintergrund eingeschränkt (Akku-Einstellungen)"
+            JobParameters.STOP_REASON_APP_STANDBY -> "App-Standby"
+            JobParameters.STOP_REASON_SYSTEM_PROCESSING -> "Systemvorgang (z. B. App-Update oder Neuplanung)"
+            JobParameters.STOP_REASON_ESTIMATED_APP_LAUNCH_TIME_CHANGED -> "Neuplanung durch das System"
+            else -> "Code $reason"
+        }
+        return "Vom System unterbrochen: $text. Android startet die Sicherung automatisch neu."
     }
 
     /**

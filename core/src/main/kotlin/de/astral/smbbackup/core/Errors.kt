@@ -3,10 +3,12 @@ package de.astral.smbbackup.core
 import com.hierynomus.mserref.NtStatus
 import com.hierynomus.mssmb2.SMBApiException
 import java.io.FileNotFoundException
+import java.io.IOException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.concurrent.TimeoutException
 
 /** Übersetzt technische Fehler in verständliche Meldungen für Protokoll und Benachrichtigung. */
 fun describeError(e: Throwable): String {
@@ -17,12 +19,24 @@ fun describeError(e: Throwable): String {
         when (cause) {
             is UnknownHostException -> return "Server-Name nicht auflösbar (${cause.message}) – besser feste IP-Adresse verwenden"
             is ConnectException, is NoRouteToHostException -> return "Server nicht erreichbar (${cause.message})"
-            is SocketTimeoutException -> return "Zeitüberschreitung bei der Verbindung zum Server"
+            is SocketTimeoutException, is TimeoutException ->
+                return "Zeitüberschreitung: NAS hat nicht rechtzeitig geantwortet (fährt es noch hoch?)"
             is FileNotFoundException -> return "Lokale Datei nicht gefunden (${cause.message})"
             is SecurityException -> return "Keine Berechtigung für lokalen Ordner – Ordner in der App neu auswählen"
         }
     }
     return e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+}
+
+/**
+ * Fehler, bei denen ein neuer Versuch kurz darauf helfen kann (Zeitüberschreitung, Verbindung
+ * abgebrochen, NAS fährt noch hoch). Antworten des Servers wie "Passwort falsch" gehören nicht dazu –
+ * wiederholte Fehlanmeldungen würden sonst die automatische IP-Sperre des NAS auslösen.
+ */
+fun isTransientConnectionError(e: Throwable): Boolean {
+    val chain = generateSequence(e) { it.cause }.take(8).toList()
+    if (chain.any { it is SMBApiException || it is SmbBackupException || it is UnknownHostException }) return false
+    return chain.any { it is TimeoutException || it is IOException }
 }
 
 private fun describeStatus(e: SMBApiException): String = when (e.status) {

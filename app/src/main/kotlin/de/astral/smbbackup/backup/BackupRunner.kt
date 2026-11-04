@@ -13,6 +13,7 @@ import de.astral.smbbackup.core.CopyStats
 import de.astral.smbbackup.core.SmbBackupSession
 import de.astral.smbbackup.core.SmbServerConfig
 import de.astral.smbbackup.core.describeError
+import de.astral.smbbackup.core.isTransientConnectionError
 import de.astral.smbbackup.data.AppSettings
 import de.astral.smbbackup.data.RunStatus
 import de.astral.smbbackup.data.Trigger
@@ -38,17 +39,29 @@ class BackupRunner(private val context: Context) {
     /** Text für die Anzeige; [fraction] (0..1) nur, wenn der Fortschritt bekannt ist. */
     data class Progress(val text: String, val fraction: Float? = null)
 
+    /** Verbindungsaufbau zum NAS fehlgeschlagen (im Unterschied zu Fehlern beim Kopieren). */
+    private class ConnectFailed(cause: Exception) : Exception(cause)
+
     private val latestStats = AtomicReference<CopyStats?>(null)
 
-    suspend fun run(trigger: Trigger, deadline: Long, onProgress: suspend (Progress) -> Unit): Outcome {
+    /**
+     * @param deadline bis wann auf Heim-WLAN und NAS gewartet wird
+     * @param stopReason Text, warum der Lauf beendet wurde, falls er abgebrochen wird
+     */
+    suspend fun run(
+        trigger: Trigger,
+        deadline: Long,
+        stopReason: () -> String? = { null },
+        onProgress: suspend (Progress) -> Unit,
+    ): Outcome {
         val log = context.app.runLog
         log.markInterrupted()
         val runId = log.start(trigger)
         var outcome = Outcome(RunStatus.FAILED, "Unbekannter Fehler")
         try {
-            outcome = execute(deadline, onProgress)
+            outcome = execute(trigger, deadline, onProgress)
         } catch (e: CancellationException) {
-            outcome = Outcome(RunStatus.CANCELLED, "Abgebrochen", latestStats.get())
+            outcome = Outcome(RunStatus.CANCELLED, stopReason() ?: "Abgebrochen", latestStats.get())
             throw e
         } catch (e: Exception) {
             outcome = Outcome(RunStatus.FAILED, describeError(e), latestStats.get())
@@ -72,7 +85,7 @@ class BackupRunner(private val context: Context) {
         return outcome
     }
 
-    private suspend fun execute(deadline: Long, onProgress: suspend (Progress) -> Unit): Outcome {
+    private suspend fun execute(trigger: Trigger, initialDeadline: Long, onProgress: suspend (Progress) -> Unit): Outcome {
         val settings = context.app.settings.load()
         val password = context.app.credentials.loadPassword()
         val missing = settings.missingFields() + listOfNotNull(if (password == null) "Passwort" else null)
@@ -80,23 +93,46 @@ class BackupRunner(private val context: Context) {
             return Outcome(RunStatus.FAILED, "Einstellungen unvollständig: ${missing.joinToString()}")
         }
 
+        var deadline = initialDeadline
         val gate = NetworkGate(context)
-        var result = gate.check(settings)
-        while (result !is GateResult.Ready && System.currentTimeMillis() < deadline) {
-            val reason = (result as? GateResult.NotHome)?.reason ?: (result as GateResult.Problem).reason
-            onProgress(Progress("Warte: $reason"))
-            delay(30_000)
-            result = gate.check(settings)
-        }
-        val ready = when (result) {
-            is GateResult.NotHome -> return Outcome(RunStatus.SKIPPED, result.reason)
-            is GateResult.Problem -> return Outcome(RunStatus.FAILED, result.reason)
-            is GateResult.Ready -> result
-        }
+        var wolNote: String? = null
+        while (true) {
+            val result = gate.check(settings)
 
-        onProgress(Progress("Verbinde mit ${settings.host} …"))
-        val stats = copyAll(settings, password!!, ready.network, onProgress)
-        return classify(stats)
+            // NAS aus: per Wake-on-LAN wecken (bei jedem Versuch erneut, falls ein Paket verloren geht).
+            if (result is GateResult.NasOffline && settings.wolMac.isNotBlank()) {
+                val firstWake = wolNote == null
+                wolNote = try {
+                    WolSender(context).wake(settings.wolMac, result.network)
+                    "Wake-on-LAN gesendet"
+                } catch (e: Exception) {
+                    describeError(e)
+                }
+                // Manuell gestartet: dem geweckten NAS Zeit zum Hochfahren geben.
+                if (firstWake && trigger == Trigger.MANUAL) {
+                    deadline = maxOf(deadline, System.currentTimeMillis() + settings.waitMinutes * 60_000L)
+                }
+            }
+
+            val now = System.currentTimeMillis()
+            if (result is GateResult.Ready) {
+                onProgress(Progress("Verbinde mit ${settings.host} …"))
+                try {
+                    return classify(copyAll(settings, password!!, result.network, onProgress))
+                } catch (e: ConnectFailed) {
+                    val cause = e.cause as Exception
+                    // Port offen, aber das NAS antwortet nicht (fährt z. B. noch hoch): später erneut versuchen.
+                    if (!isTransientConnectionError(cause) || System.currentTimeMillis() >= deadline) throw cause
+                    onProgress(Progress("Warte: NAS antwortet noch nicht (${describeError(cause)})"))
+                }
+            } else if (now >= deadline) {
+                val reason = result.message.orEmpty() + (wolNote?.let { " ($it)" } ?: "")
+                return if (result is GateResult.NotHome) Outcome(RunStatus.SKIPPED, reason) else Outcome(RunStatus.FAILED, reason)
+            } else {
+                onProgress(Progress("Warte: ${result.message}" + (wolNote?.let { "\n$it" } ?: "")))
+            }
+            delay(30_000)
+        }
     }
 
     private suspend fun copyAll(
@@ -127,7 +163,12 @@ class BackupRunner(private val context: Context) {
                     domain = settings.domain,
                     requireEncryption = settings.requireEncryption,
                 )
-                SmbBackupSession.open(config, network.socketFactory).use { session ->
+                val session = try {
+                    SmbBackupSession.open(config, network.socketFactory)
+                } catch (e: Exception) {
+                    throw ConnectFailed(e)
+                }
+                session.use {
                     var total = CopyStats()
                     val folders = settings.folders.filter { it.enabled }
                     for ((index, folder) in folders.withIndex()) {
